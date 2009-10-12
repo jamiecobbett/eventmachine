@@ -39,7 +39,11 @@ module JavaFields
   def set_field(key, value)
     field = getClass.getDeclaredField(key)
     field.setAccessible(true)
-    field.set(self, value)
+    if field.getType.toString == 'int'
+      field.setInt(self, value)
+    else
+      field.set(self, value)
+    end
   end
 
   def get_field(key)
@@ -76,6 +80,7 @@ module EventMachine
     def eventCallback a1, a2, a3, a4
       s = String.from_java_bytes(a3.array[a3.position...a3.limit]) if a3
       EventMachine::event_callback a1, a2, s || a4
+      nil
     end
   end
   # class Connection < com.rubyeventmachine.Connection
