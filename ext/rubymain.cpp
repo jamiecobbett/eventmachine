@@ -32,6 +32,7 @@ Statics
 static VALUE EmModule;
 static VALUE EmConnection;
 
+static VALUE EM_eConnectionError;
 static VALUE EM_eUnknownTimerFired;
 static VALUE EM_eConnectionNotBound;
 static VALUE EM_eUnsupported;
@@ -458,10 +459,14 @@ static VALUE t_connect_server (VALUE self, VALUE server, VALUE port)
 	// Specifically, if the value of port comes in as a string rather than an integer,
 	// NUM2INT will throw a type error, but FIX2INT will generate garbage.
 
-	const unsigned long f = evma_connect_to_server (NULL, 0, StringValuePtr(server), NUM2INT(port));
-	if (!f)
-		rb_raise (rb_eRuntimeError, "no connection");
-	return ULONG2NUM (f);
+	try {
+		const unsigned long f = evma_connect_to_server (NULL, 0, StringValuePtr(server), NUM2INT(port));
+		if (!f)
+			rb_raise (EM_eConnectionError, "no connection");
+		return ULONG2NUM (f);
+	} catch (std::runtime_error e) {
+		rb_raise (EM_eConnectionError, e.what());
+	}
 }
 
 /*********************
@@ -474,15 +479,14 @@ static VALUE t_bind_connect_server (VALUE self, VALUE bind_addr, VALUE bind_port
 	// Specifically, if the value of port comes in as a string rather than an integer,
 	// NUM2INT will throw a type error, but FIX2INT will generate garbage.
 
-	long f;
 	try {
-		f = evma_connect_to_server (StringValuePtr(bind_addr), NUM2INT(bind_port), StringValuePtr(server), NUM2INT(port));
+		const unsigned long f = evma_connect_to_server (StringValuePtr(bind_addr), NUM2INT(bind_port), StringValuePtr(server), NUM2INT(port));
 		if (!f)
-			rb_raise (rb_eRuntimeError, "no connection");
+			rb_raise (EM_eConnectionError, "no connection");
+		return ULONG2NUM (f);
 	} catch (std::runtime_error e) {
-		rb_sys_fail(e.what());
+		rb_raise (EM_eConnectionError, e.what());
 	}
-	return ULONG2NUM (f);
 }
 
 /*********************
@@ -974,9 +978,9 @@ static VALUE t_get_loop_time (VALUE self)
 t_start_proxy
 **************/
 
-static VALUE t_start_proxy (VALUE self, VALUE from, VALUE to)
+static VALUE t_start_proxy (VALUE self, VALUE from, VALUE to, VALUE bufsize)
 {
-	evma_start_proxy(NUM2ULONG (from), NUM2ULONG (to));
+	evma_start_proxy(NUM2ULONG (from), NUM2ULONG (to), NUM2ULONG(bufsize));
 	return Qnil;
 }
 
@@ -1048,7 +1052,8 @@ extern "C" void Init_rubyeventmachine()
 	EmModule = rb_define_module ("EventMachine");
 	EmConnection = rb_define_class_under (EmModule, "Connection", rb_cObject);
 
-	rb_define_class_under (EmModule, "NoHandlerForAcceptedConnection", rb_eException);
+	rb_define_class_under (EmModule, "NoHandlerForAcceptedConnection", rb_eRuntimeError);
+	EM_eConnectionError = rb_define_class_under (EmModule, "ConnectionError", rb_eRuntimeError);
 	EM_eConnectionNotBound = rb_define_class_under (EmModule, "ConnectionNotBound", rb_eRuntimeError);
 	EM_eUnknownTimerFired = rb_define_class_under (EmModule, "UnknownTimerFired", rb_eRuntimeError);
 	EM_eUnsupported = rb_define_class_under (EmModule, "Unsupported", rb_eRuntimeError);
@@ -1083,7 +1088,7 @@ extern "C" void Init_rubyeventmachine()
 	rb_define_module_function (EmModule, "resume_connection", (VALUE (*)(...))t_resume, 1);
 	rb_define_module_function (EmModule, "connection_paused?", (VALUE (*)(...))t_paused_p, 1);
 
-	rb_define_module_function (EmModule, "start_proxy", (VALUE (*)(...))t_start_proxy, 2);
+	rb_define_module_function (EmModule, "start_proxy", (VALUE (*)(...))t_start_proxy, 3);
 	rb_define_module_function (EmModule, "stop_proxy", (VALUE (*)(...))t_stop_proxy, 1);
 
 	rb_define_module_function (EmModule, "watch_filename", (VALUE (*)(...))t_watch_filename, 1);
