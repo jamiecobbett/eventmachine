@@ -1192,24 +1192,7 @@ module EventMachine
   #
   #
   def self.open_keyboard handler=nil, *args
-    # XXX we should move to the following, but it's not stable on my box - raggi
-    # klass = klass_from_handler(Connection, handler, *args)
-    
-    klass = if handler and handler.is_a?(Class)
-      raise ArgumentError, 'must provide module or subclass of EventMachine::Connection' unless Connection >= handler
-      handler
-    elsif handler
-      Class.new(Connection){ include handler }
-    else
-      Connection
-    end
-    
-    arity = klass.instance_method(:initialize).arity
-    expected = arity >= 0 ? arity : -(arity + 1)
-    if (arity >= 0 and args.size != expected) or (arity < 0 and args.size < expected)
-      raise ArgumentError, "wrong number of arguments for #{klass}#initialize (#{args.size} for #{expected})"
-    end
-
+    klass = klass_from_handler(Connection, handler, *args)
     s = read_keyboard
     c = klass.new s, *args
     @conns[s] = c
